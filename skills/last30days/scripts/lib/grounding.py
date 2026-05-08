@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 import urllib.parse
 from datetime import datetime
 from urllib.parse import urlparse
@@ -205,29 +206,69 @@ def web_search(
             backend = "parallel"
         else:
             return [], {}
+    items: list[dict] = []
+    artifact: dict = {}
     if backend == "brave":
         key = config.get("BRAVE_API_KEY")
         if not key:
             raise RuntimeError("BRAVE_API_KEY is required when web_backend='brave'")
-        return brave_search(query, date_range, key)
-    if backend == "exa":
+        items, artifact = brave_search(query, date_range, key)
+    elif backend == "exa":
         key = config.get("EXA_API_KEY")
         if not key:
             raise RuntimeError("EXA_API_KEY is required when web_backend='exa'")
-        return exa_search(query, date_range, key)
-    if backend == "serper":
+        items, artifact = exa_search(query, date_range, key)
+    elif backend == "serper":
         key = config.get("SERPER_API_KEY")
         if not key:
             raise RuntimeError("SERPER_API_KEY is required when web_backend='serper'")
-        return serper_search(query, date_range, key)
-    if backend == "parallel":
+        items, artifact = serper_search(query, date_range, key)
+    elif backend == "parallel":
         key = config.get("PARALLEL_API_KEY")
         if not key:
             raise RuntimeError("PARALLEL_API_KEY is required when web_backend='parallel'")
-        return parallel_search(query, date_range, key)
-    if backend != "none":
+        items, artifact = parallel_search(query, date_range, key)
+    elif backend != "none":
         raise ValueError(f"Unsupported web backend: {backend!r}")
-    return [], {}
+    else:
+        return [], {}
+    if items:
+        items = _enrich_reddit_items(items)
+    return items, artifact
+
+
+def _enrich_reddit_items(items: list[dict]) -> list[dict]:
+    """Enrich web search results that are Reddit URLs with thread body and comments.
+
+    Claude Code's WebFetch blocks reddit.com, so the model can't retrieve
+    Reddit content from web search results. This fetches it via the public
+    JSON API (reddit.com/.../.json) which bypasses that restriction.
+    """
+    from . import reddit_enrich
+
+    for item in items:
+        url = item.get("url", "")
+        if "reddit.com" not in url or "/comments/" not in url:
+            continue
+        try:
+            thread_data = reddit_enrich.fetch_thread_data(url, timeout=8)
+            if not thread_data:
+                continue
+            parsed = reddit_enrich.parse_thread_data(thread_data)
+            selftext = parsed.get("selftext", "")
+            if selftext:
+                item["snippet"] = selftext[:2000]
+            comments = parsed.get("comments", [])
+            top = reddit_enrich.get_top_comments(comments)
+            if top:
+                item["top_comments"] = [
+                    {"score": c.get("score", 0), "excerpt": (c.get("body") or "")[:200]}
+                    for c in top[:5]
+                ]
+            item["enriched_via"] = "reddit_json_api"
+        except Exception as exc:
+            sys.stderr.write(f"[Web] Reddit enrichment failed for {url}: {exc}\n")
+    return items
 
 
 # ---------------------------------------------------------------------------
