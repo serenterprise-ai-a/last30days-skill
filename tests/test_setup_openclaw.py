@@ -213,10 +213,10 @@ class TestPollDeviceAuth:
     @patch("lib.setup_wizard.urlopen")
     def test_timeout_returns_none(self, mock_urlopen, mock_time):
         """Returns None when timeout is exceeded."""
-        # poll_device_auth calls time.time() for deadline init, last_reminder init,
-        # then once per while-loop iteration. Three values are enough for one check
-        # that exceeds the deadline.
-        mock_time.time = MagicMock(side_effect=[0, 0, 301])
+        # poll_device_auth captures started_at once, derives deadline + last_reminder
+        # from it, then checks time.time() in the while-loop. Two values: started_at,
+        # then a value past the deadline so the loop exits immediately.
+        mock_time.time = MagicMock(side_effect=[0, 301])
         mock_time.sleep = MagicMock()
 
         result = setup_wizard.poll_device_auth("dc-123", interval=5, timeout=300)
