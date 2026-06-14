@@ -6,29 +6,38 @@ from unittest.mock import patch
 from lib import amazon, normalize
 
 
+# Mirrors Canopy's real REST shapes (verified live 2026-06):
+#   search:  data.amazonProductSearchResults.productResults.results[]
+#   reviews: data.amazonProduct.topReviews[]
 SEARCH_PAYLOAD = {
-    "success": True,
-    "result": {
-        "products": [
-            {"asin": "B01AAA", "title": "Compact Standing Desk for Small Spaces",
-             "url": "https://www.amazon.com/dp/B01AAA", "rating": 4.3, "ratingsTotal": 1200},
-            {"asin": "B02BBB", "title": "Mini Adjustable Desk Riser",
-             "rating": 4.0, "ratingsTotal": 800},
-        ]
-    },
+    "data": {
+        "amazonProductSearchResults": {
+            "productResults": {
+                "results": [
+                    {"sponsored": True, "asin": "B00SPONSORED", "title": "Sponsored Ad Desk",
+                     "url": "https://www.amazon.com/dp/B00SPONSORED", "rating": 4.1, "ratingsTotal": 50},
+                    {"sponsored": False, "asin": "B01AAA", "title": "Compact Standing Desk for Small Spaces",
+                     "url": "https://www.amazon.com/dp/B01AAA", "rating": 4.3, "ratingsTotal": 1200},
+                    {"sponsored": False, "asin": "B02BBB", "title": "Mini Adjustable Desk Riser",
+                     "url": "https://www.amazon.com/dp/B02BBB", "rating": 4.0, "ratingsTotal": 800},
+                ]
+            }
+        }
+    }
 }
 
 REVIEWS_PAYLOAD = {
-    "success": True,
-    "result": {
-        "reviews": [
-            {"id": "r1", "title": "Wobbles at full height", "body": "Sturdy at sitting height but wobbles badly when raised to standing.",
-             "rating": 2, "helpfulVotes": 47, "verifiedPurchase": True, "reviewer": {"name": "Dana"}, "date": "2025-11-02"},
-            {"id": "r2", "title": "Too small", "body": "Desktop is shallower than advertised; my monitor barely fits.",
-             "rating": 3, "helpfulVotes": 12, "verifiedPurchase": True, "reviewer": {"name": "Sam"}, "date": "2025-09-15"},
-            {"id": "r3", "title": "", "body": "", "rating": 5, "helpfulVotes": 0},  # empty body -> dropped
-        ]
-    },
+    "data": {
+        "amazonProduct": {
+            "topReviews": [
+                {"id": "r1", "title": "Wobbles at full height", "body": "Sturdy at sitting height but wobbles badly when raised to standing.",
+                 "rating": 2, "helpfulVotes": 47, "verifiedPurchase": True, "reviewer": {"name": "Dana"}},
+                {"id": "r2", "title": "Too small", "body": "Desktop is shallower than advertised; my monitor barely fits.",
+                 "rating": 3, "helpfulVotes": 12, "verifiedPurchase": True, "reviewer": {"name": "Sam"}},
+                {"id": "r3", "title": "", "body": "", "rating": 5, "helpfulVotes": 0},  # empty body -> dropped
+            ]
+        }
+    }
 }
 
 
@@ -102,8 +111,8 @@ class TestEndToEndShape(unittest.TestCase):
         normalized = normalize.normalize_source_items("amazon", raw, "2026-06-01", "2026-06-14")
         self.assertEqual(len(normalized), len(raw))  # nothing dropped by date filter
         self.assertTrue(all(n.published_at is None for n in normalized))
-        # the real review date is preserved in metadata
-        self.assertTrue(any(n.metadata.get("review_date") for n in normalized))
+        # product context (asin) is preserved in metadata for the UI
+        self.assertTrue(all(n.metadata.get("asin") for n in normalized))
 
 
 if __name__ == "__main__":

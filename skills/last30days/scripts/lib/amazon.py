@@ -71,34 +71,34 @@ def _first(d: Dict[str, Any], *keys: str, default: Any = None) -> Any:
     return default
 
 
-def _unwrap_list(data: Dict[str, Any], *keys: str) -> List[Dict[str, Any]]:
-    """Find the first list of dicts under a wrapped Canopy response.
+def _dig(data: Any, *path: str) -> Any:
+    """Walk a nested dict by key path, returning None if any hop is missing."""
+    cur = data
+    for key in path:
+        if not isinstance(cur, dict):
+            return None
+        cur = cur.get(key)
+    return cur
 
-    Responses look like {"success": true, "result": {...}} or {"results": [...]}.
-    We probe `result.<key>`, top-level `<key>`, and a bare `result`/`data` list.
-    """
-    result = data.get("result")
-    candidates: List[Any] = []
-    if isinstance(result, dict):
-        candidates.extend(result.get(k) for k in keys)
-    candidates.extend(data.get(k) for k in keys)
-    candidates.extend([result, data.get("data"), data.get("results")])
-    for c in candidates:
-        if isinstance(c, list) and (not c or isinstance(c[0], dict)):
-            return c
-    return []
+
+def _as_dict_list(value: Any) -> List[Dict[str, Any]]:
+    return value if isinstance(value, list) and (not value or isinstance(value[0], dict)) else []
 
 
 def search_products(
-    topic: str, token: str, count: int, domain: str = "amazon.com"
+    topic: str, token: str, count: int
 ) -> List[Dict[str, Any]]:
-    """Search Amazon and return up to `count` top-ranked products."""
+    """Search Amazon and return up to `count` top-ranked organic products.
+
+    Canopy's `domain`/`sort` query params currently 500 the endpoint, so we send
+    only `searchTerm`. Results come back in Amazon's own ranking order.
+    """
     core = _extract_core_subject(topic)
     _log(f"Searching Amazon for '{core}' (top {count} products)")
     try:
         data = http.get(
             f"{CANOPY_BASE}/search",
-            params={"searchTerm": core, "domain": domain},
+            params={"searchTerm": core},
             headers=canopy_headers(token),
             timeout=30,
             retries=2,
@@ -107,11 +107,16 @@ def search_products(
         _log(f"Canopy search error: {e}")
         return []
 
-    products = _unwrap_list(data, "products", "searchResults", "items")
+    # Real shape: data.amazonProductSearchResults.productResults.results[]
+    results = _as_dict_list(
+        _dig(data, "data", "amazonProductSearchResults", "productResults", "results")
+    )
     parsed: List[Dict[str, Any]] = []
-    for p in products[:count]:
+    for p in results:
+        if len(parsed) >= count:
+            break
         asin = _first(p, "asin", "ASIN")
-        if not asin:
+        if not asin or p.get("sponsored"):  # skip ads; we want organic top sellers
             continue
         parsed.append({
             "asin": str(asin),
@@ -125,13 +130,17 @@ def search_products(
 
 
 def fetch_reviews(
-    asin: str, token: str, count: int, domain: str = "amazon.com"
+    asin: str, token: str, count: int
 ) -> List[Dict[str, Any]]:
-    """Fetch the most-helpful reviews for one product (by ASIN)."""
+    """Fetch the most-helpful reviews for one product (by ASIN).
+
+    `topReviews` is already Amazon's most-helpful set; we only send `asin`
+    (Canopy's `domain`/`sort` params currently 500 the endpoint).
+    """
     try:
         data = http.get(
             f"{CANOPY_BASE}/product/reviews",
-            params={"asin": asin, "domain": domain, "sort": "most_helpful"},
+            params={"asin": asin},
             headers=canopy_headers(token),
             timeout=30,
             retries=2,
@@ -139,7 +148,12 @@ def fetch_reviews(
     except Exception as e:  # noqa: BLE001
         _log(f"Canopy reviews error for {asin}: {e}")
         return []
-    reviews = _unwrap_list(data, "reviews", "items")
+    # Real shape: data.amazonProduct.topReviews[] (fallback: reviewsPaginated.reviews)
+    reviews = _as_dict_list(_dig(data, "data", "amazonProduct", "topReviews"))
+    if not reviews:
+        reviews = _as_dict_list(
+            _dig(data, "data", "amazonProduct", "reviewsPaginated", "reviews")
+        )
     # Most-helpful first (defensive: re-sort by helpful votes if the API didn't).
     parsed = [
         {
