@@ -15,6 +15,20 @@ def get_date_range(days: int = 30) -> Tuple[str, str]:
     return from_date.isoformat(), today.isoformat()
 
 
+def days_between(from_date: str, to_date: str) -> Optional[int]:
+    """Number of days spanned by a (from_date, to_date) window.
+
+    Both dates are YYYY-MM-DD. Returns None if either fails to parse, so callers
+    can fall back to a default window.
+    """
+    try:
+        start = datetime.strptime(from_date, "%Y-%m-%d").date()
+        end = datetime.strptime(to_date, "%Y-%m-%d").date()
+    except (ValueError, TypeError):
+        return None
+    return (end - start).days
+
+
 def parse_date(date_str: Optional[str]) -> Optional[datetime]:
     """Parse a date string in various formats.
 

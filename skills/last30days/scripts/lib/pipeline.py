@@ -11,6 +11,7 @@ from shutil import which
 from typing import Any
 
 from . import (
+    amazon,
     bird_x,
     bluesky,
     dates,
@@ -61,6 +62,7 @@ SEARCH_ALIAS = {
     "web": "grounding",
     "xhs": "xiaohongshu",
     "xquik": "xquik",
+    "amzn": "amazon",
 }
 
 MAX_SOURCE_FETCHES: dict[str, int] = {"x": 2}
@@ -83,6 +85,7 @@ MOCK_AVAILABLE_SOURCES = [
     "pinterest",
     "xquik",
     "digg",
+    "amazon",
 ]
 
 
@@ -130,6 +133,10 @@ def available_sources(config: dict[str, Any], requested_sources: list[str] | Non
         available.append("threads")
     if requested_sources and "pinterest" in requested_sources and env.is_pinterest_available(config):
         available.append("pinterest")
+    # Amazon (Canopy) is a paid, opt-in source — only when explicitly requested
+    # and a key is present, mirroring pinterest.
+    if requested_sources and "amazon" in requested_sources and env.is_amazon_available(config):
+        available.append("amazon")
     if env.is_xquik_available(config):
         available.append("xquik")
     exclude = {s.strip().lower() for s in (config.get("EXCLUDE_SOURCES") or "").split(",") if s.strip()}
@@ -513,7 +520,12 @@ def _normalize_score_dedupe(
         freshness_mode=freshness_mode,
     )
     prepared_query = relevance.PreparedQuery(ranking_query)
-    normalized = signals.annotate_stream(normalized, prepared_query, freshness_mode)
+    # Recency scoring should scale to the active search window, so derive it from
+    # the date range already in hand (defaults to 30 if the dates don't parse).
+    window_days = dates.days_between(from_date, to_date) or 30
+    normalized = signals.annotate_stream(
+        normalized, prepared_query, freshness_mode, lookback_days=window_days
+    )
     normalized = signals.prune_low_relevance(normalized)
     normalized = dedupe.dedupe_items(normalized)
     for item in normalized:
@@ -1022,6 +1034,13 @@ def _retrieve_stream(
             token=env.get_pinterest_token(config),
         )
         return pinterest.parse_pinterest_response(result), {}
+    if source == "amazon":
+        result = amazon.search_amazon(
+            subquery.search_query, from_date, to_date,
+            depth=depth,
+            token=env.get_amazon_token(config),
+        )
+        return amazon.parse_amazon_response(result), {}
     if source == "xiaohongshu":
         return xiaohongshu_api.search_feeds(
             subquery.search_query,

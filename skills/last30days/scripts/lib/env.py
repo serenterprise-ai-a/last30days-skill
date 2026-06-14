@@ -43,7 +43,7 @@ KEYCHAIN_KEYS = (
     "AUTH_TOKEN", "CT0", "BSKY_HANDLE", "BSKY_APP_PASSWORD",
     "TRUTHSOCIAL_TOKEN", "BRAVE_API_KEY", "EXA_API_KEY", "SERPER_API_KEY",
     "OPENROUTER_API_KEY", "PARALLEL_API_KEY", "XQUIK_API_KEY",
-    "XIAOHONGSHU_API_BASE",
+    "XIAOHONGSHU_API_BASE", "CANOPY_API_KEY",
 )
 
 AuthSource = Literal["api_key", "codex", "none"]
@@ -318,6 +318,7 @@ def get_config() -> dict[str, Any]:
         ('OPENAI_MODEL_PIN', None),
         ('XAI_MODEL_PIN', None),
         ('SCRAPECREATORS_API_KEY', None),
+        ('CANOPY_API_KEY', None),
         ('APIFY_API_TOKEN', None),
         ('AUTH_TOKEN', None),
         ('CT0', None),
@@ -555,6 +556,16 @@ def is_youtube_sc_available(config: dict[str, Any]) -> bool:
     Used when yt-dlp is not installed or fails.
     """
     return bool(config.get('SCRAPECREATORS_API_KEY'))
+
+
+def is_amazon_available(config: dict[str, Any]) -> bool:
+    """Check if the Amazon (Canopy) source is available — requires CANOPY_API_KEY."""
+    return bool(config.get('CANOPY_API_KEY'))
+
+
+def get_amazon_token(config: dict[str, Any]) -> str:
+    """Return the Canopy API key for Amazon product/review search."""
+    return config.get('CANOPY_API_KEY') or ''
 
 
 def is_hackernews_available() -> bool:

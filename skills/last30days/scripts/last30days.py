@@ -235,6 +235,32 @@ def persist_report(report: schema.Report) -> dict[str, int]:
         raise
 
 
+MIN_LOOKBACK_DAYS = 1
+MAX_LOOKBACK_DAYS = 365
+
+
+def clamp_lookback_days(days: int) -> int:
+    """Clamp a requested lookback window to the supported [1, 365] range.
+
+    The engine defaults to 30 days but supports windows up to a year so callers
+    can surface older-but-relevant discussions (e.g. Amazon reviews, evergreen
+    threads). Out-of-range values are clamped — with a stderr warning — instead
+    of hard-failing, so an over-eager `--days 9999` still runs against the cap.
+    """
+    if days < MIN_LOOKBACK_DAYS:
+        sys.stderr.write(
+            f"--days {days} below minimum; using {MIN_LOOKBACK_DAYS}.\n"
+        )
+        return MIN_LOOKBACK_DAYS
+    if days > MAX_LOOKBACK_DAYS:
+        sys.stderr.write(
+            f"--days {days} exceeds maximum; capping at {MAX_LOOKBACK_DAYS} "
+            f"(1 year).\n"
+        )
+        return MAX_LOOKBACK_DAYS
+    return days
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Research a topic across live social, market, and grounded web sources.")
     parser.add_argument("topic", nargs="*", help="Research topic")
@@ -267,7 +293,7 @@ def build_parser() -> argparse.ArgumentParser:
         dest="lookback_days",
         type=int,
         default=30,
-        help="Number of days to look back for research (default: 30, watchlist uses 90)",
+        help="Number of days to look back for research (default: 30, watchlist uses 90, max: 365)",
     )
     parser.add_argument("--auto-resolve", action="store_true",
                         help="Use web search to discover subreddits/handles before planning (for platforms without WebSearch)")
@@ -560,6 +586,12 @@ def main() -> int:
     args, extra_argv = parser.parse_known_args()
     if args.debug:
         os.environ["LAST30DAYS_DEBUG"] = "1"
+
+    # Clamp the lookback window to a sane range. The engine supports windows
+    # beyond the namesake 30 days (up to a year) so research can reach older
+    # but still-relevant discussions; values outside [1, 365] are clamped with
+    # a warning rather than hard-failing.
+    args.lookback_days = clamp_lookback_days(args.lookback_days)
 
     config = env.get_config()
 
