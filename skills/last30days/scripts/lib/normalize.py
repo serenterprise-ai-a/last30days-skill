@@ -48,6 +48,7 @@ def normalize_source_items(
         "threads": lambda s, i, idx, fd, td: _normalize_microblog(s, i, idx, fd, td, "TH", "Threads post"),
         "xquik": _normalize_x,
         "pinterest": _normalize_pinterest,
+        "amazon": _normalize_amazon,
         "polymarket": _normalize_polymarket,
         "digg": _normalize_digg,
         "grounding": _normalize_grounding,
@@ -342,6 +343,39 @@ def _normalize_pinterest(
         relevance_hint=item.get("relevance", 0.5),
         why_relevant=str(item.get("why_relevant") or ""),
         snippet=description[:400],
+    )
+
+
+def _normalize_amazon(
+    source: str,
+    item: dict[str, Any],
+    index: int,
+    from_date: str,
+    to_date: str,
+) -> schema.SourceItem:
+    """Normalizer for Amazon customer reviews (the pain-point signal).
+
+    Reviews are treated as evergreen: published_at is left None so the recency
+    window filter keeps them regardless of age (the real review date lives in
+    metadata). Helpful votes are the engagement signal.
+    """
+    body = str(item.get("body") or "").strip()
+    title = str(item.get("title") or "").strip()
+    return _source_item(
+        item_id=str(item.get("id") or f"AMZN{index + 1}"),
+        source=source,
+        title=title or f"Amazon review {index + 1}",
+        body=body,
+        url=str(item.get("url") or ""),
+        author=str(item.get("author") or ""),
+        container=str(item.get("product") or ""),
+        published_at=None,  # evergreen — see docstring
+        date_confidence="low",
+        engagement=item.get("engagement") or {},
+        relevance_hint=item.get("relevance", 0.5),
+        why_relevant=str(item.get("why_relevant") or ""),
+        snippet=body[:400],
+        metadata=item.get("metadata") or {},
     )
 
 

@@ -20,6 +20,9 @@ SOURCE_QUALITY = {
     "polymarket": 0.5,
     "instagram": 0.58,
     "tiktok": 0.58,
+    # Verified-buyer reviews are first-hand product experience — higher
+    # signal-to-noise than social chatter, below curated web/HN.
+    "amazon": 0.72,
 }
 
 
@@ -46,6 +49,12 @@ def local_relevance(
     if item.source == "youtube" and item.engagement.get("views", 0) > 100_000:
         score = max(score, 0.3)
 
+    # Amazon review floor: the product was a top hit for the niche search, so its
+    # reviews are on-topic by construction even when a complaint ("wobbles at full
+    # height") doesn't echo the query terms. Mirrors the project-mode GitHub floor.
+    if item.source == "amazon":
+        score = max(score, 0.3)
+
     # Project-mode GitHub floor: items fetched via --github-repo are explicitly
     # requested by the user and relevant by construction. Without this floor,
     # repos with low token diversity (e.g., "openclaw/openclaw" -> 1 unique token)
@@ -57,8 +66,15 @@ def local_relevance(
     return score
 
 
-def freshness(item: schema.SourceItem, freshness_mode: str = "balanced_recent") -> int:
-    score = dates.recency_score(item.published_at)
+def freshness(
+    item: schema.SourceItem,
+    freshness_mode: str = "balanced_recent",
+    lookback_days: int = 30,
+) -> int:
+    # Scale the recency curve to the actual search window so a 6-month-old item
+    # in a 1-year search isn't treated as "ancient" (score 0). With the default
+    # 30-day window this is identical to the previous behaviour.
+    score = dates.recency_score(item.published_at, max_days=max(lookback_days, 1))
     if freshness_mode == "strict_recent":
         return int(score)
     if freshness_mode == "evergreen_ok":
@@ -97,6 +113,7 @@ ENGAGEMENT_WEIGHTS: dict[str, list[tuple[str, float]]] = {
     "truthsocial":  [("likes", 0.45), ("reposts", 0.30), ("replies", 0.25)],
     "polymarket":   [("volume", 0.60), ("liquidity", 0.40)],
     "digg":         [("postCount", 0.40), ("uniqueAuthors", 0.30), ("rank_score", 0.30)],
+    "amazon":       [("helpful_votes", 1.0)],
 }
 
 
@@ -182,13 +199,14 @@ def annotate_stream(
     items: list[schema.SourceItem],
     ranking_query: "str | relevance.PreparedQuery",
     freshness_mode: str,
+    lookback_days: int = 30,
 ) -> list[schema.SourceItem]:
     """Attach local scoring metadata and return items sorted by local_rank_score."""
     prepared_query = ranking_query if isinstance(ranking_query, relevance.PreparedQuery) else relevance.PreparedQuery(ranking_query)
     engagement_scores = normalize([engagement_raw(item) for item in items])
     for item, eng_score in zip(items, engagement_scores, strict=True):
         item.local_relevance = local_relevance(item, prepared_query)
-        item.freshness = freshness(item, freshness_mode)
+        item.freshness = freshness(item, freshness_mode, lookback_days=lookback_days)
         item.engagement_score = eng_score
         item.source_quality = source_quality(item.source)
         item.local_rank_score = (

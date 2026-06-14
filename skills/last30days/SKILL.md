@@ -332,6 +332,7 @@ Common patterns:
 - If yt-dlp is installed (check `which yt-dlp`): add YouTube
 - If SCRAPECREATORS_API_KEY is set: add TikTok, Instagram, Threads (suppress any of these via EXCLUDE_SOURCES)
 - If SCRAPECREATORS_API_KEY is set and the user explicitly requested pinterest for this query (e.g. via `--search=pinterest`): add Pinterest
+- If CANOPY_API_KEY is set and the user explicitly requested amazon (e.g. via `--search=amazon`): add Amazon (top products' customer reviews → pain-point evidence; pairs well with `--days 365` since reviews are evergreen)
 - If BSKY_HANDLE and BSKY_APP_PASSWORD are set: add Bluesky
 - If OPENROUTER_API_KEY is set and INCLUDE_SOURCES contains perplexity: add Perplexity
 - If EXCLUDE_SOURCES is set (comma-separated, case-insensitive): drop any matching source from the list above before displaying
@@ -866,7 +867,7 @@ Only show lines for platforms where something was resolved. Skip empty lines. On
 - For how_to: prioritize YouTube (tutorials) and Reddit (guides)
 - Primary subquery weight = 1.0, secondary = 0.6-0.8, peripheral = 0.3-0.5
 
-**Available sources (include ALL in primary subquery):** reddit, x, youtube, tiktok, instagram, hackernews, polymarket. Optional: bluesky, truthsocial, threads, pinterest, grounding (web search - only if user has Brave/Exa/Serper key), digg (Digg clusters - only if `digg-pp-cli` is on PATH)
+**Available sources (include ALL in primary subquery):** reddit, x, youtube, tiktok, instagram, hackernews, polymarket. Optional: bluesky, truthsocial, threads, pinterest, amazon (customer reviews — only if `CANOPY_API_KEY` is set and explicitly requested via `--search amazon`), grounding (web search - only if user has Brave/Exa/Serper key), digg (Digg clusters - only if `digg-pp-cli` is on PATH)
 
 **Intent → freshness_mode mapping:**
 - breaking_news, prediction → `strict_recent`
@@ -1026,7 +1027,7 @@ For ALL query types:
   The WebSearch tool requires citation; satisfy it there, not as a trailing section.
 
 **Options** (passed through from user's command):
-- `--days=N` → Look back N days instead of 30 (e.g., `--days=7` for weekly roundup)
+- `--days=N` → Look back N days instead of 30 (e.g., `--days=7` for weekly roundup, `--days=365` for up to a year; range 1–365, clamped)
 - `--quick` → Faster, fewer sources (8-12 each)
 - (default) → Balanced (20-30 each)
 - `--deep` → Comprehensive (50-70 Reddit, 40-60 X)

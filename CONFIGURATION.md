@@ -35,6 +35,27 @@ The footer line `📎 Raw results saved to ${LAST30DAYS_MEMORY_DIR:-$HOME/Docume
 
 ---
 
+## Search window (`--days`)
+
+The namesake 30-day window is the **default**, not a hard limit. Use `--days N`
+(alias `--lookback-days N`) to widen the lookback when older-but-relevant
+discussion matters — e.g. evergreen reviews or slow-moving niches.
+
+| | |
+|---|---|
+| Default | `30` |
+| Range | `1`–`365` (values outside are clamped with a stderr warning) |
+| Example | `/last30days "<topic>" --days 365` |
+
+Recency scoring scales to the chosen window, so a 6-month-old item in a
+1-year search still carries recency signal instead of being treated as ancient.
+Note that most live social APIs only surface recent content regardless of the
+window; the widened window mainly helps date-flexible sources (Amazon reviews,
+GitHub, web, forum search). The **Amazon** source treats reviews as evergreen
+and is not date-filtered at all.
+
+---
+
 ## API keys (`.env`)
 
 The skill reads keys from a `.env` file. Two locations are supported, in priority order:
@@ -60,6 +81,7 @@ The project-scoped file is the cleanest pattern for **per-client setups**: drop 
 | Instagram | `SCRAPECREATORS_API_KEY` + `INCLUDE_SOURCES` contains `instagram` | Instagram Reels | 10K free calls; raise `LAST30DAYS_TRANSCRIPT_TIMEOUT` (default 30s) if SC is slow on your network |
 | Threads | `SCRAPECREATORS_API_KEY` + `INCLUDE_SOURCES` contains `threads` | Threads items | 10K free calls |
 | Pinterest | `SCRAPECREATORS_API_KEY` + `INCLUDE_SOURCES` contains `pinterest` | Pinterest items | 10K free calls |
+| Amazon (reviews) | `CANOPY_API_KEY` + `--search amazon` (or `INCLUDE_SOURCES` contains `amazon`) | top products' customer reviews as pain-point evidence | [Canopy](https://www.canopyapi.co): 100 free requests/mo, then PAYG; ~1 credit per product (1 search + N review calls per run) |
 | Bluesky | `BSKY_HANDLE` + `BSKY_APP_PASSWORD` | Bluesky items | yes (app password at bsky.app) |
 | TruthSocial | `TRUTHSOCIAL_TOKEN` | TruthSocial items | yes |
 | Web search | one of: `BRAVE_API_KEY`, `EXA_API_KEY`, `SERPER_API_KEY`, `PARALLEL_API_KEY` | `--auto-resolve` and Step 2 supplements | Brave has a free tier; native WebSearch on Claude Code / Codex / Gemini works as a fallback |
@@ -78,6 +100,10 @@ BRAVE_API_KEY=<your-brave-key>
 # Optional sources
 SCRAPECREATORS_API_KEY=<your-scrapecreators-key>
 INCLUDE_SOURCES=tiktok,instagram
+# Amazon customer reviews (pain-point mining) via Canopy — opt-in per run with
+# `--search amazon`; pairs well with a wider window (e.g. `--days 365`) since
+# reviews are evergreen.
+CANOPY_API_KEY=<your-canopy-key>
 
 # X authentication (one option only)
 XAI_API_KEY=<your-xai-key>

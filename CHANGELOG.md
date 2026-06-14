@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Amazon source** (`--search amazon`): pulls the top-ranked Amazon products for a niche and mines each product's most-helpful customer reviews as pain-point evidence — surfacing the gaps real buyers complain about. Backed by the Canopy API (`CANOPY_API_KEY`); reviews are treated as evergreen so they survive the recency window.
+- **Configurable lookback window**: `--days`/`--lookback-days` now supports up to 365 days (default still 30), clamped to `[1, 365]` with a warning. Recency scoring scales to the active window so older-but-in-window items aren't zeroed out.
+
 ## [3.3.2] - 2026-06-06
 
 ### Fixed
