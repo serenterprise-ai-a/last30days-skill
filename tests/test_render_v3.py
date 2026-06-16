@@ -3,6 +3,40 @@ import unittest
 from lib import render, schema
 
 
+class TestAllItemsBySourceCoverage(unittest.TestCase):
+    """render_full's '## All Items by Source' must list every source that has
+    items. A hardcoded source_order that omits a source silently drops its
+    items from the section downstream consumers parse (regression: amazon)."""
+
+    def _report_with(self, source: str) -> schema.Report:
+        rep = sample_report()
+        item = schema.SourceItem(
+            item_id="AMZN1", source=source, title="Wobbly desk review",
+            body="Wobbles at full height.", url="https://www.amazon.com/dp/B01",
+            container="Some Standing Desk", published_at=None,
+            engagement={"helpful_votes": 12}, metadata={},
+        )
+        rep.items_by_source[source] = [item]
+        return rep
+
+    def test_amazon_items_appear_in_all_items_by_source(self):
+        text = render.render_full(self._report_with("amazon"))
+        self.assertIn("## All Items by Source", text)
+        self.assertIn("### Amazon", text)
+        self.assertIn("AMZN1", text)
+
+    def test_every_nonempty_source_is_rendered(self):
+        # Guard the general invariant, not just amazon: no non-empty source
+        # should be silently missing from the per-source listing.
+        rep = self._report_with("amazon")
+        text = render.render_full(rep)
+        section = text.split("## All Items by Source", 1)[1]
+        for src, items in rep.items_by_source.items():
+            if items:
+                self.assertIn(render._source_label(src), section,
+                              f"source {src} missing from All Items by Source")
+
+
 def sample_report() -> schema.Report:
     primary_item = schema.SourceItem(
         item_id="i1",
